@@ -64,4 +64,5 @@ cython_debug/
 
 .idea/
 
-chat_log.txt
+credentails.txt
+sending.log

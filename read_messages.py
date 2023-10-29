@@ -8,7 +8,6 @@ import aiofiles
 async def chat_spy(host, port, log_file):
     reader, writer = await asyncio.open_connection(
         host, port)
-    print("!!!")
     try:
         while not reader.at_eof():
             data = await reader.read(500)
@@ -21,12 +20,9 @@ async def chat_spy(host, port, log_file):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", help="specify the host", type=str)
-    parser.add_argument("--port", help="specify the port", type=int)
-    parser.add_argument("--history", help="path to log file", type=str)
+    parser.add_argument("host", help="specify the host", type=str)
+    parser.add_argument("port", help="specify the port", type=int)
+    parser.add_argument("history", help="path to log file", type=str)
     args = parser.parse_args()
-
-    if args.host is None or args.port is None or args.history is None:
-        raise Exception("Specify all args!")
 
     asyncio.run(chat_spy(args.host, args.port, args.history))
