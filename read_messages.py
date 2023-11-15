@@ -4,17 +4,19 @@ from datetime import datetime
 
 import aiofiles
 
+from utils import connection_closing
+
 
 async def chat_spy(host, port, log_file):
-    reader, writer = await asyncio.open_connection(
-        host, port)
     try:
-        while not reader.at_eof():
-            data = await reader.read(500)
-            async with aiofiles.open(log_file, mode='a') as f:
-                write_str = f'{datetime.now().strftime("[%d.%m.%y %H:%M]")} {data.decode(errors="ignore")}'
-                await f.write(write_str)
-            print(f'Received: {data.decode(errors="ignore")!r}')
+        async with connection_closing(await asyncio.open_connection(host, port)) as conn:
+            reader, writer = conn
+            while not reader.at_eof():
+                data = await reader.read(500)
+                async with aiofiles.open(log_file, mode='a') as f:
+                    write_str = f'{datetime.now().strftime("[%d.%m.%y %H:%M]")} {data.decode(errors="ignore")}'
+                    await f.write(write_str)
+                print(f'Received: {data.decode(errors="ignore")!r}')
     except ConnectionError:
         print("Network error")
 

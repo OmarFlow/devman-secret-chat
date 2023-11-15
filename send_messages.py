@@ -4,10 +4,12 @@ import logging
 
 import aiofiles
 
+from utils import connection_closing
+
 logging.basicConfig(filename='sending.log', encoding='utf-8', level=logging.DEBUG, datefmt='%d.%m.%y %H:%M', format='%(asctime)s %(message)s')
 
 
-async def informer(msg):
+async def write_info_log(msg):
     print(msg)
     logging.info(msg)
 
@@ -23,14 +25,13 @@ async def register(writer, reader, user_name):
     async with aiofiles.open('credentails.txt', mode='wb') as f:
         await f.write(cred)
 
-    await informer("Вы успешно зарегистрировались, ваши данные находятся в файле credentails.txt")
+    await write_info_log("Вы успешно зарегистрировались, ваши данные находятся в файле credentails.txt")
 
 
 async def submit_message(writer, message):
     writer.write(f"{message}\n\n".encode())
     await writer.drain()
-
-    await informer("Ваше сообщение отправлено")
+    await write_info_log("Ваше сообщение отправлено")
 
 
 async def authorise(writer, reader, key, user_name):
@@ -39,7 +40,7 @@ async def authorise(writer, reader, key, user_name):
         await writer.drain()
         rr = await reader.read(2000)
         if 'null' in rr.decode():
-            await informer("Неизвестный токен. Проверьте его или зарегистрируйте заново.")
+            await write_info_log("Неизвестный токен. Проверьте его или зарегистрируйте заново.")
             return None
         return True
     else:
@@ -48,15 +49,17 @@ async def authorise(writer, reader, key, user_name):
 
 
 async def chat_say(host, port, message, chat_key=None, user_name=None):
-    reader, writer = await asyncio.open_connection(
-        host, port)
+    try:
+        async with connection_closing(await asyncio.open_connection(host, port)) as conn:
+            reader, writer = conn
+            hello_message = await reader.readuntil()
+            logging.debug(hello_message.decode())
 
-    hello_message = await reader.readuntil()
-    logging.debug(hello_message.decode())
-
-    auth = await authorise(writer, reader, chat_key, user_name)
-    if auth is not None:
-        await submit_message(writer, f"{message!r}")
+            auth = await authorise(writer, reader, chat_key, user_name)
+            if auth is not None:
+                await submit_message(writer, f"{message!r}")
+    except ConnectionError:
+        await write_info_log("Network error")
 
 
 if __name__ == '__main__':
