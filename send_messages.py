@@ -1,7 +1,7 @@
 import argparse
 import asyncio
 import logging
-
+from anyio import create_task_group
 import aiofiles
 
 from utils import connection_closing
@@ -29,6 +29,8 @@ async def register(writer, reader, user_name):
 
 
 async def submit_message(writer, message):
+    if message is None:
+        message = ''
     writer.write(f"{message}\n\n".encode())
     await writer.drain()
     await write_info_log("Ваше сообщение отправлено")
@@ -38,8 +40,8 @@ async def authorise(writer, reader, key, user_name):
     if key:
         writer.write(f"{key}\n\n".encode())
         await writer.drain()
-        rr = await reader.read(2000)
-        if 'null' in rr.decode():
+        response = await reader.read(2000)
+        if 'null' in response.decode():
             await write_info_log("Неизвестный токен. Проверьте его или зарегистрируйте заново.")
             return None
         return True
@@ -66,7 +68,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("host", help="specify the host", type=str)
     parser.add_argument("port", help="specify the port", type=int)
-    parser.add_argument("msg", help="message to send", type=str)
+    parser.add_argument("--msg", help="message to send", type=str)
     parser.add_argument("--key", help="personal chat key", type=str)
     parser.add_argument("--user_name", help="specify user name", type=str)
     args = parser.parse_args()
