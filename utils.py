@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 
 @asynccontextmanager
-async def connection_closing(connection):
+async def connection_manager(connection):
     try:
         yield connection
     finally:

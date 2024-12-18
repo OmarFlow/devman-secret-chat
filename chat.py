@@ -10,7 +10,7 @@ from tkinter import messagebox
 from anyio import create_task_group
 
 import gui
-from utils import connection_closing
+from utils import connection_manager
 from exceptions import InvalidTokenException
 
 
@@ -75,12 +75,12 @@ async def submit_message(writer, message, log_queue: asyncio.Queue):
     log_queue.put_nowait("Ваше сообщение отправлено")
 
 
-async def chat_spy(host: str, port: int, chat_queue: asyncio.Queue,
+async def read_message(host: str, port: int, chat_queue: asyncio.Queue,
                    log_queue: asyncio.Queue, watchdog_queue: asyncio.Queue):
 
     status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
 
-    async with connection_closing(await asyncio.open_connection(host, port)) as conn:
+    async with connection_manager(await asyncio.open_connection(host, port)) as conn:
         reader, _ = conn
         status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
         while not reader.at_eof():
@@ -96,12 +96,12 @@ async def chat_spy(host: str, port: int, chat_queue: asyncio.Queue,
                 watchdog_queue.put_nowait(write_str)
 
 
-async def chat_say(host: str, port: int, chat_key: Optional[str],
+async def write_message(host: str, port: int, chat_key: Optional[str],
                    user_name: Optional[str], watchdog_queue: asyncio.Queue, log_queue: asyncio.Queue):
 
     status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
 
-    async with connection_closing(await asyncio.open_connection(host, port)) as conn:
+    async with connection_manager(await asyncio.open_connection(host, port)) as conn:
         reader, writer = conn
         status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
 
@@ -146,9 +146,9 @@ if __name__ == '__main__':
         while True:
             try:
                 async with create_task_group() as tg:
-                    tg.start_soon(chat_spy, args.host, args.read_port, messages_queue, log_queue, watchdog_queue)
+                    tg.start_soon(read_message, args.host, args.read_port, messages_queue, log_queue, watchdog_queue)
                     tg.start_soon(watch_for_connection, watchdog_queue)
-                    tg.start_soon(chat_say, args.host, args.write_port, args.key, args.user_name, watchdog_queue, log_queue)
+                    tg.start_soon(write_message, args.host, args.write_port, args.key, args.user_name, watchdog_queue, log_queue)
                     tg.start_soon(ping_pong, args.host, args.write_port)
             except* ConnectionError as excgroup:
                 log_queue.put_nowait("Network Error")

@@ -4,7 +4,7 @@ import logging
 from anyio import create_task_group
 import aiofiles
 
-from utils import connection_closing
+from utils import connection_manager
 
 logging.basicConfig(filename='sending.log', encoding='utf-8', level=logging.DEBUG, datefmt='%d.%m.%y %H:%M', format='%(asctime)s %(message)s')
 
@@ -52,7 +52,7 @@ async def authorise(writer, reader, key, user_name):
 
 async def chat_say(host, port, message, chat_key=None, user_name=None):
     try:
-        async with connection_closing(await asyncio.open_connection(host, port)) as conn:
+        async with connection_manager(await asyncio.open_connection(host, port)) as conn:
             reader, writer = conn
             hello_message = await reader.readuntil()
             logging.debug(hello_message.decode())
