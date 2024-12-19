@@ -22,21 +22,7 @@ watchdog_queue = asyncio.Queue()
 
 
 chat_logger = logging.getLogger('chat')
-chat_logger.setLevel(logging.INFO)
-fh = logging.FileHandler('sending.log', encoding='utf-8')
-fh.setLevel(logging.INFO)
-formatter = logging.Formatter('[%(asctime)s] %(message)s')
-fh.setFormatter(formatter)
-chat_logger.addHandler(fh)
-
-
 watch_logger = logging.getLogger('watch')
-watch_logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-watch_logger.addHandler(ch)
 
 
 async def write_log(log_queue: asyncio.Queue) -> None:
@@ -132,7 +118,33 @@ async def ping_pong(host: str, port: int):
             raise ConnectionError
         await asyncio.sleep(0.3)
 
+async def handle_connection(host, read_port, write_port, user_name, key):
+    while True:
+        try:
+            async with create_task_group() as tg:
+                tg.start_soon(read_message, host, read_port, messages_queue, log_queue, watchdog_queue)
+                tg.start_soon(watch_for_connection, watchdog_queue)
+                tg.start_soon(write_message, host, write_port, key, user_name, watchdog_queue, log_queue)
+                tg.start_soon(ping_pong, host, write_port)
+        except* ConnectionError as excgroup:
+            log_queue.put_nowait("Network Error")
+            status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.CLOSED)
+
 if __name__ == '__main__':
+    watch_logger.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    watch_logger.addHandler(ch)
+
+    chat_logger.setLevel(logging.INFO)
+    fh = logging.FileHandler('sending.log', encoding='utf-8')
+    fh.setLevel(logging.INFO)
+    formatter = logging.Formatter('[%(asctime)s] %(message)s')
+    fh.setFormatter(formatter)
+    chat_logger.addHandler(fh)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("host", help="specify the host", type=str)
     parser.add_argument("read_port", help="specify the port for reading messages", type=int)
@@ -142,23 +154,12 @@ if __name__ == '__main__':
     parser.add_argument("--user_name", help="specify user name", type=str)
     args = parser.parse_args()
 
-    async def handle_connection():
-        while True:
-            try:
-                async with create_task_group() as tg:
-                    tg.start_soon(read_message, args.host, args.read_port, messages_queue, log_queue, watchdog_queue)
-                    tg.start_soon(watch_for_connection, watchdog_queue)
-                    tg.start_soon(write_message, args.host, args.write_port, args.key, args.user_name, watchdog_queue, log_queue)
-                    tg.start_soon(ping_pong, args.host, args.write_port)
-            except* ConnectionError as excgroup:
-                log_queue.put_nowait("Network Error")
-                status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.CLOSED)
-
     async def main():
         async with create_task_group() as tg:
             tg.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue)
             tg.start_soon(write_log, log_queue)
-            tg.start_soon(handle_connection)
+            tg.start_soon(handle_connection, args.host, args.read_port,
+                        args.write_port, args.user_name, args.key)
 
     loop = asyncio.new_event_loop()
     try:
